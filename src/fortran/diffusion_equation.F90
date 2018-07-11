@@ -62,6 +62,7 @@ PROGRAM DIFFUSION_EQUATION
   TYPE(cmfe_FieldsType) :: Fields
   TYPE(cmfe_GeneratedMeshType) :: GeneratedMesh  
   TYPE(cmfe_MeshType) :: Mesh
+  TYPE(cmfe_NodesType) :: Nodes
   TYPE(cmfe_ProblemType) :: Problem
   TYPE(cmfe_ControlLoopType) :: ControlLoop
   TYPE(cmfe_RegionType) :: Region,WorldRegion
@@ -79,6 +80,8 @@ PROGRAM DIFFUSION_EQUATION
   
   !Generic CMISS variables
   INTEGER(CMISSIntg) :: NumberOfComputationalNodes,ComputationalNodeNumber
+  INTEGER(CMISSIntg) :: FirstNodeNumber,LastNodeNumber
+  INTEGER(CMISSIntg) :: FirstNodeDomain,LastNodeDomain
   INTEGER(CMISSIntg) :: EquationsSetIndex
   INTEGER(CMISSIntg) :: Err
   
@@ -151,8 +154,13 @@ PROGRAM DIFFUSION_EQUATION
   CALL cmfe_Basis_Initialise(Basis,Err)
   CALL cmfe_Basis_CreateStart(BasisUserNumber,Basis,Err)
   IF(NUMBER_GLOBAL_Z_ELEMENTS==0) THEN
+
+    CALL cmfe_Basis_TypeSet(Basis,CMFE_BASIS_SIMPLEX_TYPE,Err)
+    !CALL cmfe_Basis_QuadratureOrderSet(Basis,2,Err)
+
     !Set the basis to be a bilinear Lagrange basis
     !CALL cmfe_Basis_TypeSet(Basis,CMFE_BASIS_LAGRANGE_HERMITE_TP_TYPE,Err)
+
     CALL cmfe_Basis_NumberOfXiSet(Basis,2,Err)
 !    CALL cmfe_Basis_InterpolationXiSet(Basis,[3,3],Err)
 !    CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(Basis,[4,4],Err) 
@@ -256,23 +264,23 @@ PROGRAM DIFFUSION_EQUATION
   !Finish the equations set dependent field variables
   CALL cmfe_EquationsSet_MaterialsCreateFinish(EquationsSet,Err)
 
-  !-----------------------------------------------------------------------------------------------------------
-  ! ANALYTIC FIELD
-  !-----------------------------------------------------------------------------------------------------------
+  ! !-----------------------------------------------------------------------------------------------------------
+  ! ! ANALYTIC FIELD
+  ! !-----------------------------------------------------------------------------------------------------------
   
-  !Create the equations set analytic field variables
-  CALL cmfe_Field_Initialise(AnalyticField,Err)
-  IF(NUMBER_GLOBAL_Z_ELEMENTS==0) THEN  
-    CALL cmfe_EquationsSet_AnalyticCreateStart(EquationsSet,CMFE_EQUATIONS_SET_DIFFUSION_EQUATION_TWO_DIM_1, &
-      & AnalyticFieldUserNumber, &
-      & AnalyticField,Err)
-  ELSE
-    WRITE(*,'(A)') "Three dimensions is not implemented."
-    STOP
-  ENDIF
+  ! !Create the equations set analytic field variables
+  ! CALL cmfe_Field_Initialise(AnalyticField,Err)
+  ! IF(NUMBER_GLOBAL_Z_ELEMENTS==0) THEN  
+  !   CALL cmfe_EquationsSet_AnalyticCreateStart(EquationsSet,CMFE_EQUATIONS_SET_DIFFUSION_EQUATION_TWO_DIM_1, &
+  !     & AnalyticFieldUserNumber, &
+  !     & AnalyticField,Err)
+  ! ELSE
+  !   WRITE(*,'(A)') "Three dimensions is not implemented."
+  !   STOP
+  ! ENDIF
   
-  !Finish the equations set analytic field variables
-  CALL cmfe_EquationsSet_AnalyticCreateFinish(EquationsSet,Err)
+  ! !Finish the equations set analytic field variables
+  ! CALL cmfe_EquationsSet_AnalyticCreateFinish(EquationsSet,Err)
   
   !-----------------------------------------------------------------------------------------------------------
   ! EQUATIONS
@@ -395,14 +403,39 @@ PROGRAM DIFFUSION_EQUATION
   !Finish the creation of the problem solver equations
   CALL cmfe_Problem_SolverEquationsCreateFinish(Problem,Err)
   
+  ! !-----------------------------------------------------------------------------------------------------------
+  ! ! BOUNDARY CONDITIONS
+  ! !-----------------------------------------------------------------------------------------------------------
+  
+  ! !Create the solver equations boundary conditions
+  ! CALL cmfe_BoundaryConditions_Initialise(BoundaryConditions,Err)
+  ! CALL cmfe_SolverEquations_BoundaryConditionsCreateStart(SolverEquations,BoundaryConditions,Err)
+  ! !CALL cmfe_SolverEquations_BoundaryConditionsAnalytic(SolverEquations,Err)
+  ! CALL cmfe_SolverEquations_BoundaryConditionsCreateFinish(SolverEquations,Err)
+
   !-----------------------------------------------------------------------------------------------------------
   ! BOUNDARY CONDITIONS
   !-----------------------------------------------------------------------------------------------------------
-  
-  !Create the solver equations boundary conditions
+
+  !Start the creation of the equations set boundary conditions
   CALL cmfe_BoundaryConditions_Initialise(BoundaryConditions,Err)
   CALL cmfe_SolverEquations_BoundaryConditionsCreateStart(SolverEquations,BoundaryConditions,Err)
-  CALL cmfe_SolverEquations_BoundaryConditionsAnalytic(SolverEquations,Err)
+  !Set the first node to 0.0 and the last node to 1.0
+  FirstNodeNumber=1
+  CALL cmfe_Nodes_Initialise(Nodes,Err)
+  CALL cmfe_Region_NodesGet(Region,Nodes,Err)
+  CALL cmfe_Nodes_NumberOfNodesGet(Nodes,LastNodeNumber,Err)
+  CALL cmfe_Decomposition_NodeDomainGet(Decomposition,FirstNodeNumber,1,FirstNodeDomain,Err)
+  CALL cmfe_Decomposition_NodeDomainGet(Decomposition,LastNodeNumber,1,LastNodeDomain,Err)
+  IF(FirstNodeDomain==ComputationalNodeNumber) THEN
+    CALL cmfe_BoundaryConditions_SetNode(BoundaryConditions,DependentField,CMFE_FIELD_U_VARIABLE_TYPE,1,1,FirstNodeNumber,1, &
+      & CMFE_BOUNDARY_CONDITION_FIXED,0.0_CMISSRP,Err)
+  ENDIF
+  IF(LastNodeDomain==ComputationalNodeNumber) THEN
+    CALL cmfe_BoundaryConditions_SetNode(BoundaryConditions,DependentField,CMFE_FIELD_U_VARIABLE_TYPE,1,1,LastNodeNumber,1, &
+      & CMFE_BOUNDARY_CONDITION_FIXED,1.0_CMISSRP,Err)
+  ENDIF
+  !Finish the creation of the equations set boundary conditions
   CALL cmfe_SolverEquations_BoundaryConditionsCreateFinish(SolverEquations,Err)
   
   !-----------------------------------------------------------------------------------------------------------
@@ -417,7 +450,7 @@ PROGRAM DIFFUSION_EQUATION
   !----------------------------------------------------------------------------------------------------------
 
   !Output Analytic analysis
-  Call cmfe_AnalyticAnalysis_Output(DependentField,"diffusion_equation_analytic",Err)
+  !Call cmfe_AnalyticAnalysis_Output(DependentField,"diffusion_equation_analytic",Err)
 
   EXPORT_FIELD=.TRUE.
   IF(EXPORT_FIELD) THEN
